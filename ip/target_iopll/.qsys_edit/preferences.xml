@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<preferences>
+ <debug showDebugMenu="0" />
+ <window width="1854" height="1011" x="66" y="69" />
+ <systemtable filter="All Interfaces" />
+ <library
+   expandedCategories="Project/Custom Instruction Modules,Project/Systems,Project,Library,Existing IP Variants" />
+ <generation path="" greybox="0" />
+ <hdlexample language="VERILOG" />
+</preferences>
