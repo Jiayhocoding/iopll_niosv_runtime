@@ -15,20 +15,49 @@ The separate, non-destructive 50 MHz to 10 MHz derivative is available at
 
 ## System architecture
 
-```text
-CLOCK0_50 (50 MHz)
-        |
-        +--> Platform Designer system --> Nios V
-        |                              --> nios_iopll_bridge
-        |                                      |
-        |                               command handshake
-        |                                      |
-        +--> target_iopll <-------------- hvio_master
-                 |                            |
-                 +--> C0 output              +--> HVIO serial Avalon-MM pins
-                 +--> locked
+```mermaid
+flowchart LR
+    CLK["CLOCK0_50<br/>50 MHz reference + control clock"]
+    RST["Reset Release + CPU_RESET_n<br/>sys_reset_n"]
 
-Scope outputs: D[0] = C0, D[1] = locked, D[2] = firmware marker
+    subgraph PD["Platform Designer system — system u0"]
+        direction LR
+        CPU["Nios V processor<br/>100 → 50 MHz reconfiguration firmware"]
+        BR["nios_iopll_bridge<br/>Avalon-MM register bank<br/>command/status + lock synchronizer"]
+        PIO["PIO<br/>scope trigger marker"]
+
+        CPU -->|"Avalon-MM MMIO<br/>CONTROL / ADDRESS / WDATA / STATUS"| BR
+        CPU -->|"software marker"| PIO
+    end
+
+    HVIO["hvio_master<br/>fixed-cycle HVIO adapter<br/>32-bit command ↔ 8-bit transfer"]
+    PLL["target_iopll<br/>ref = 50 MHz<br/>M = 64, N = 1, VCO = 3.2 GHz<br/>C0: /32 → /64"]
+
+    BR -->|"cmd_start / cmd_write<br/>9-bit word address / 32-bit WDATA"| HVIO
+    HVIO -->|"busy / done / error<br/>32-bit RDATA"| BR
+
+    HVIO -->|"core_avl_address[8:0]<br/>read / write / 8-bit WDATA"| PLL
+    PLL -->|"core_avl_readdata[7:0]"| HVIO
+    PLL -->|"locked_async<br/>two-flop synchronized for STATUS[3]"| BR
+
+    CLK -.->|"clk_50"| PD
+    CLK -.->|"clk_50"| HVIO
+    CLK -.->|"refclk + core_avl_clk"| PLL
+
+    RST -.->|"sys_reset_n"| PD
+    RST -.->|"sys_reset_n"| HVIO
+    RST -.->|"target_iopll_rst = ~sys_reset_n<br/>OR diagnostic software reset"| PLL
+
+    subgraph OBS["Oscilloscope observability"]
+        direction TB
+        CH1["GPIO_D[0] / CH1<br/>IOPLL outclk_0<br/>100 MHz → 50 MHz"]
+        CH2["GPIO_D[1] / CH2<br/>direct asynchronous locked"]
+        CH3["GPIO_D[2] / CH3<br/>Nios V transition marker"]
+    end
+
+    PLL -->|"outclk_0"| CH1
+    PLL -->|"locked — direct path"| CH2
+    PIO --> CH3
 ```
 
 The Nios V processor does not directly drive the unusual fixed-cycle HVIO
